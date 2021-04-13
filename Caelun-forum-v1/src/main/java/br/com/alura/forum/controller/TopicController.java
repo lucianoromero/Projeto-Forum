@@ -1,0 +1,104 @@
+package br.com.alura.forum.controller;
+
+import java.net.URI;
+import java.util.List;
+
+import javax.validation.Valid;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.WebDataBinder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.InitBinder;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import br.com.alura.forum.controller.dto.input.NewTopicInputDto;
+import br.com.alura.forum.controller.dto.input.TopicSearchInputDto;
+import br.com.alura.forum.controller.dto.output.TopicBriefOutputDto;
+import br.com.alura.forum.controller.dto.output.TopicDashboardItemOutputDto;
+import br.com.alura.forum.controller.dto.output.TopicOutputDto;
+import br.com.alura.forum.model.User;
+import br.com.alura.forum.model.topic.domain.Topic;
+import br.com.alura.forum.repository.CourseRepository;
+import br.com.alura.forum.repository.TopicRepository;
+import br.com.alura.forum.service.DashboardDataProcessingService;
+import br.com.alura.forum.validator.NewTopicCustomValidator;
+import br.com.alura.forum.vo.CategoriesAndTheirStatisticsData;
+
+/**
+ * @author Luciano <br>
+ *         Classe respostavel pelas chamadas endpoint
+ */
+@RestController
+@RequestMapping("/api/topics")
+public class TopicController {
+
+	// Injecao de dependencias
+	@Autowired
+	private TopicRepository topicRepository;
+
+	@Autowired
+	private CourseRepository courseRepository;
+
+	@Autowired
+	private DashboardDataProcessingService dashboardDataProcessingService;
+
+	/**
+	 * @param topicSearch
+	 * @param pageRequest
+	 * @return Lista dos topicos
+	 */
+	@GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+	public Page<TopicBriefOutputDto> listTopics(TopicSearchInputDto topicSearch,
+			@PageableDefault(sort = "creationInstant", direction = Sort.Direction.DESC) Pageable pageRequest) {
+
+		Specification<Topic> topicSearchSpecification = topicSearch.build();
+		Page<Topic> topics = this.topicRepository.findAll(topicSearchSpecification, pageRequest);
+
+		return TopicBriefOutputDto.listFromTopics(topics);
+	}
+
+	/**
+	 * @return Sub categorias
+	 * 
+	 */
+	@GetMapping(value = "/dashboard", produces = MediaType.APPLICATION_JSON_VALUE)
+	public List<TopicDashboardItemOutputDto> getDashboardInfo() {
+
+		CategoriesAndTheirStatisticsData categoriesStatisticsData = this.dashboardDataProcessingService.execute();
+		return TopicDashboardItemOutputDto.listFromCategories(categoriesStatisticsData);
+
+	}
+
+	/**
+	 * @param newTopicDto
+	 * @param loggedUser
+	 * @param uriBuilder
+	 * @return Criacao de um novo topico
+	 */
+	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<TopicOutputDto> createTopic(@Valid @RequestBody NewTopicInputDto newTopicDto,
+			@AuthenticationPrincipal User loggedUser, UriComponentsBuilder uriBuilder) {
+		Topic topic = newTopicDto.build(loggedUser, this.courseRepository);
+		this.topicRepository.save(topic);
+		URI path = uriBuilder.path("/api/topics/{id}").buildAndExpand(topic.getId()).toUri();
+		return ResponseEntity.created(path).body(new TopicOutputDto(topic));
+	}
+
+	@InitBinder("newTopicInputDto")
+	public void initBinder(WebDataBinder binder, @AuthenticationPrincipal User loggedUser) {
+		binder.addValidators(new NewTopicCustomValidator(this.topicRepository, loggedUser));
+	}
+
+}

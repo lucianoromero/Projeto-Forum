@@ -1,0 +1,58 @@
+package br.com.alura.forum.repository;
+
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.Repository;
+import org.springframework.data.repository.query.Param;
+
+import br.com.alura.forum.model.Category;
+import br.com.alura.forum.model.User;
+import br.com.alura.forum.model.topic.domain.Topic;
+
+/**
+ * @author Luciano <br>
+ *         Interface que faz os CRUD no banco de dados <br>
+ *         Ela ja implementa direto as configuracao em vez de ter que criar a
+ *         query como no DAO devico a Repository
+ * 
+ */
+public interface TopicRepository extends Repository<Topic, Long>, JpaSpecificationExecutor<Topic> {
+
+	@Query("select t from Topic t")
+	List<Topic> list();
+
+	List<Topic> findAll();
+	
+	
+	@Query("SELECT count(topic) FROM Topic topic "
+			+ "JOIN topic.course course "
+			+ "JOIN course.subcategory subcategory "
+			+ "JOIN subcategory.category category "
+			+ "WHERE category = :category")
+	int countTopicsByCategory(@Param("category") Category category);
+
+	
+	@Query("SELECT count(topic) FROM Topic topic "
+			+ "JOIN topic.course course "
+			+ "JOIN course.subcategory subcategory "
+			+ "JOIN subcategory.category category "
+			+ "WHERE category = :category AND topic.creationInstant > :lastWeek")
+	int countLastWeekTopicsByCategory(@Param("category") Category category, 
+			@Param("lastWeek") Instant lastWeek);
+
+	
+	@Query("SELECT count(topic) FROM Topic topic "
+			+ "JOIN topic.course course "
+			+ "JOIN course.subcategory subcategory "
+			+ "JOIN subcategory.category category "
+			+ "WHERE category = :category AND topic.status = 'NOT_ANSWERED'")
+	int countUnansweredTopicsByCategory(@Param("category") Category category);
+
+	void save(Topic topic);
+
+	//TODO criacao da implementacao exe4
+	List<Topic> findByOwnerAndCreationInstantAfterOrderByCreationInstantAsc(User loggedUser, Instant oneHourAgo);
+}
